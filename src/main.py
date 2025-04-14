@@ -26,8 +26,8 @@ async def http_error_handler(request: Request, call_next) -> Response | JSONResp
 
 
 @api.exception_handler(RequestValidationError)
-async def validation_exception_handler():
-    return error_response(status_code=422, message="RequestValidation failed, wrong format or missing data")
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return error_response(status_code=422, message=f"RequestValidation failed, wrong format or missing data {exc.errors()}")
 
 
 @api.exception_handler(HTTPException)
@@ -42,3 +42,5 @@ def home():
 
 
 api.include_router(prefix='/users', router=user_router)
+
+

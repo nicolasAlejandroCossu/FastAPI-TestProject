@@ -9,21 +9,37 @@ users: List[User] = [
     User(
         id=1,
         username='cossu.07',
+        firstname='Nicolas',
+        lastname='Cossu',
+        age=18,
+        gender='M',
         country='Argentina'
     ),
     User(
         id=2,
         username='testUser',
-        country='Argentina'
+        firstname='John',
+        lastname='Doe',
+        age=25,
+        gender='M',
+        country='United States'
     ),
     User(
         id=3,
-        username='newUser',
-        country='United States'
+        username='2testUser',
+        firstname='Mary',
+        lastname='Lens',
+        age=31,
+        gender='F',
+        country='Argentina'
     )
 ]
 
 user_router = APIRouter()
+
+"""
+---- GET USERS LIST ---- 
+"""
 
 
 @user_router.get('/', tags=['Users'])
@@ -31,6 +47,11 @@ def get_users() -> JSONResponse:
 
     response_content = [obj.model_dump() for obj in users]
     return success_response(status_code=200, data=response_content)
+
+
+"""
+---- GET USERS LIST BY COUNTRY ---- 
+"""
 
 
 @user_router.get('/by_country', tags=['Users'])
@@ -47,6 +68,11 @@ def get_users_by_country(country: str) -> JSONResponse:
     return success_response(status_code=200, data=[], message="Haven't found users from that country")
 
 
+"""
+---- GET SPECIFIC USER ---- 
+"""
+
+
 @user_router.get('/{id}', tags=['Users'])
 def get_user(id: int = Path(gt=0)) -> JSONResponse:
 
@@ -58,6 +84,11 @@ def get_user(id: int = Path(gt=0)) -> JSONResponse:
     return error_response(status_code=404, message="User not found")
 
 
+"""
+---- CREATE USER ---- 
+"""
+
+
 @user_router.post('/', tags=['Users'])
 def create_user(obj: UserCreate):
 
@@ -65,11 +96,16 @@ def create_user(obj: UserCreate):
     return success_response(status_code=201, message="User created")
 
 
+"""
+---- EDIT USER ---- 
+"""
+
+
 @user_router.put('/{id}', tags=['Users'])
 def update_user(id: int, obj: UserUpdate) -> JSONResponse:
 
-    if len(obj.model_dump()) != len(obj.model_dump(exclude_none=True)):
-        return error_response(status_code=400, message="Wrong format request, missing data")
+    if obj.model_dump(exclude_none=True).keys() != User.__annotations__.keys():
+        return error_response(status_code=400, message="Request must include all fields")
 
     for user in users:
         if user.id == id:
@@ -81,32 +117,25 @@ def update_user(id: int, obj: UserUpdate) -> JSONResponse:
     return error_response(status_code=404, message="User not found")
 
 
-@user_router.patch('/{id}/username', tags=['Users'])
-def update_user_username(id: int, obj: UserUpdate) -> JSONResponse:
-
-    if obj.username == None:
-        return error_response(status_code=400, message="Wrong format request, missing data")
-
+"""
+---- PATCH USER ---- 
+"""
+@user_router.patch("/{id}", tags=["Users"])
+def patch_user(id: int, obj: UserUpdate):
+    
     for user in users:
         if user.id == id:
-            user.username = obj.username
-            return success_response(status_code=200, message="User username patched")
-
+            updated_data = obj.model_dump(exclude_unset=True)
+            for key, value in updated_data.items():
+                setattr(user, key, value)
+            return success_response(status_code=200, message="User patched")
+        
     return error_response(status_code=404, message="User not found")
 
 
-@user_router.patch('/{id}/country', tags=['Users'])
-def update_user_country(id: int, obj: UserUpdate) -> JSONResponse:
-
-    if obj.username == None:
-        return error_response(status_code=400, message="Wrong format request, missing data")
-
-    for user in users:
-        if user.id == id:
-            user.country = obj.country
-            return success_response(status_code=200, message="User country patched")
-
-    return error_response(status_code=404, message="User not found")
+"""
+---- DELETE USER ---- 
+"""
 
 
 @user_router.delete('/{id}', tags=['Users'])
