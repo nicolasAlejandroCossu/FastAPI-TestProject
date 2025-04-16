@@ -4,7 +4,7 @@
 - Instalar *requirements.txt*
 - Borrar la db si está inicializada
 - Ejecutar *init_db.py*
-- Levantar la api con *uvicorn.src.main:api --reload* desde /Project
+- Levantar la api con *uvicorn src.main:api --reload* desde /Project
 
 ## Ficheros:
 ```
