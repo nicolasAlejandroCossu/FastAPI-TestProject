@@ -1,5 +1,6 @@
 ## Inicio rapido:
 
+- Requiere *Python 3.13.2* y *Pip*
 - Instalar *requirements.txt*
 - Borrar la db si está inicializada
 - Ejecutar *init_db.py*
