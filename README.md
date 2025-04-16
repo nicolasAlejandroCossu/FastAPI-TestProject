@@ -6,6 +6,7 @@
 - Levantar la api con *uvicorn.src.main:api --reload* desde /Project
 
 ## Ficheros:
+```
 Project/ 
 ├── .pytest_cache/ # Archivos temporales de pytest 
 ├── src/ # Código fuente principal 
@@ -28,3 +29,4 @@ Project/
 ├── test.db # Archivo de base de datos SQLite 
 ├── README.md # Documentación del proyecto 
 └── .gitattributes # Configuración para Git
+```
