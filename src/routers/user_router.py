@@ -1,98 +1,101 @@
-from typing import List
 from fastapi.responses import JSONResponse
-from fastapi import APIRouter, Path
+from fastapi import APIRouter, Depends, Path
 
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+
+from src.models.user_model import User
+from src.database import get_db
 from src.responses.responses import error_response, success_response
-from src.models.user_model import User, UserCreate, UserUpdate
-
-users: List[User] = [
-    User(
-        id=1,
-        username='cossu.07',
-        firstname='Nicolas',
-        lastname='Cossu',
-        age=18,
-        gender='M',
-        country='Argentina'
-    ),
-    User(
-        id=2,
-        username='testUser',
-        firstname='John',
-        lastname='Doe',
-        age=25,
-        gender='M',
-        country='United States'
-    ),
-    User(
-        id=3,
-        username='2testUser',
-        firstname='Mary',
-        lastname='Lens',
-        age=31,
-        gender='F',
-        country='Argentina'
-    )
-]
+from src.schemas.user_schema import BaseUser, UserCreate, UserResponse, UserUpdate
 
 user_router = APIRouter()
+
 
 """
 ---- GET USERS LIST ---- 
 """
 
-
 @user_router.get('/', tags=['Users'])
-def get_users() -> JSONResponse:
+def get_users(db: Session = Depends(get_db)) -> JSONResponse:
 
-    response_content = [obj.model_dump() for obj in users]
-    return success_response(status_code=200, data=response_content)
+    users = db.query(User).all()
+    response = [UserResponse.model_validate(user).model_dump() for user in users]
+    return success_response(status_code=200, data=response)
 
 
 """
 ---- GET USERS LIST BY COUNTRY ---- 
 """
 
-
 @user_router.get('/by_country', tags=['Users'])
-def get_users_by_country(country: str) -> JSONResponse:
+def get_users_by_country(country: str, db: Session = Depends(get_db)) -> JSONResponse:
 
-    userslist: List[User] = []
-    for user in users:
-        if user.country == country:
-            userslist.append(user)
-    if userslist:
-        response = [user.model_dump() for user in userslist]
-        return success_response(status_code=200, data=response, message="Users list found")
+    users = db.query(User).filter(User.country == country)
 
-    return success_response(status_code=200, data=[], message="Haven't found users from that country")
+    response = [UserResponse.model_validate(user).model_dump() for user in users]
+
+    if not response:
+        return success_response(status_code=200, data=[], message="Haven't found users from that country")
+
+    return success_response(status_code=200, data=response, message="Users list found")
 
 
 """
----- GET SPECIFIC USER ---- 
+---- GET USERS BY USERNAME LIKE ----
 """
 
+@user_router.get('/by_user', tags=['Users'])
+def get_users_by_username(username: str, db: Session = Depends(get_db)) -> JSONResponse:
+
+    users = db.query(User).filter(User.username.like(f'%{username}%'))
+
+    response = [UserResponse.model_validate(user).model_dump() for user in users]
+
+    if not response:
+        return success_response(status_code=200, data=[], message="Haven't found username matches")
+
+    return success_response(status_code=200, data=response, message="Users list found")
+
+
+"""
+---- GET USER BY ID ---- 
+"""
 
 @user_router.get('/{id}', tags=['Users'])
-def get_user(id: int = Path(gt=0)) -> JSONResponse:
+def get_user(id: int = Path(ge=0), db: Session = Depends(get_db)) -> JSONResponse:
 
-    for user in users:
-        if user.id == id:
-            response_content = user.model_dump()
-            return success_response(status_code=200, data=response_content, message="User found")
+    user = db.query(User).filter(User.id == id).first()
 
-    return error_response(status_code=404, message="User not found")
+    if not user:
+        return success_response(status_code=200, data={}, message="Haven't found a user with that id")
+
+    response = UserResponse.model_validate(user).model_dump()
+
+    return success_response(status_code=200, data=response, message="User found")
 
 
 """
 ---- CREATE USER ---- 
 """
 
-
 @user_router.post('/', tags=['Users'])
-def create_user(obj: UserCreate):
+def create_user(obj: UserCreate, db: Session = Depends(get_db)):
 
-    users.append(obj)
+    user = User(
+        id=obj.id,
+        username=obj.username,
+        firstname=obj.firstname,
+        lastname=obj.lastname,
+        age=obj.age,
+        gender=obj.gender,
+        country=obj.country
+    )
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
     return success_response(status_code=201, message="User created")
 
 
@@ -100,50 +103,62 @@ def create_user(obj: UserCreate):
 ---- EDIT USER ---- 
 """
 
-
 @user_router.put('/{id}', tags=['Users'])
-def update_user(id: int, obj: UserUpdate) -> JSONResponse:
+def update_user(id: int, obj: UserUpdate, db: Session = Depends(get_db)) -> JSONResponse:
 
-    if obj.model_dump(exclude_none=True).keys() != User.__annotations__.keys():
+    if obj.model_dump(exclude_none=True).keys() != BaseUser.__annotations__.keys():
         return error_response(status_code=400, message="Request must include all fields")
 
-    for user in users:
-        if user.id == id:
-            user.id = obj.id
-            user.username = obj.username
-            user.country = obj.country
-            return success_response(status_code=200, message="User has been edited")
+    user = db.query(User).filter(User.id == id).first()
 
-    return error_response(status_code=404, message="User not found")
+    if user is None:
+        return error_response(status_code=404, message="User not found")
+
+    for key, value in obj.model_dump().items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+
+    return success_response(status_code=200, message="User has been edited")
 
 
 """
 ---- PATCH USER ---- 
 """
+
 @user_router.patch("/{id}", tags=["Users"])
-def patch_user(id: int, obj: UserUpdate):
-    
-    for user in users:
-        if user.id == id:
-            updated_data = obj.model_dump(exclude_unset=True)
-            for key, value in updated_data.items():
-                setattr(user, key, value)
-            return success_response(status_code=200, message="User patched")
-        
-    return error_response(status_code=404, message="User not found")
+def patch_user(id: int, obj: UserUpdate, db: Session = Depends(get_db)):
+
+    user = db.query(User).filter(User.id == id).first()
+
+    if user is None:
+        return error_response(status_code=404, message="User not found")
+
+    updated_data = obj.model_dump(exclude_unset=True)
+
+    for key, value in updated_data.items():
+        setattr(user, key, value)
+
+    db.commit()
+    db.refresh(user)
+
+    return success_response(status_code=200, message="User patched")
 
 
 """
 ---- DELETE USER ---- 
 """
 
-
 @user_router.delete('/{id}', tags=['Users'])
-def delete_user(id: int) -> JSONResponse:
+def delete_user(id: int, db: Session = Depends(get_db)) -> JSONResponse:
 
-    for user in users:
-        if user.id == id:
-            users.remove(user)
-            return success_response(status_code=200, message="User deleted")
+    user = db.query(User).filter(User.id == id).first()
 
-    return error_response(status_code=404, message="User not found")
+    if user is None:
+        return error_response(status_code=404, message="User not found")
+
+    db.delete(user)
+    db.commit()
+
+    return success_response(status_code=200, message="User deleted")
